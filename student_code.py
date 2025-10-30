@@ -1,110 +1,102 @@
+"""
+student_code.py
+Implement TraversableDigraph and DAG
+"""
 
 from collections import deque
 
 
 class SortableDigraph:
     """
-    Minimal parent class placeholder.
-    We assume the real class already supports:
-       - self.nodes: set
-       - self.edges: dict of {u : set of neighbors}
-       - add_node()
-       - add_edge()       (will be overridden in DAG)
-       - topological sort
+    Base digraph: stores nodes + edges; supports topological sorting.
     """
 
     def __init__(self):
-        self.nodes = set()
+        self.nodes = {}
         self.edges = {}
 
-    def add_node(self, name):
-        if name not in self.nodes:
-            self.nodes.add(name)
+    def add_node(self, name, value=None):
+        """
+        Add a node with optional stored value.
+        """
+        self.nodes[name] = value
+        if name not in self.edges:
             self.edges[name] = set()
 
     def add_edge(self, u, v):
-        """Normal directed edge insertion — overridden in DAG."""
+        """
+        Add directed edge u -> v.
+        (Will be overridden in DAG)
+        """
         self.add_node(u)
         self.add_node(v)
         self.edges[u].add(v)
 
 
-# =====================================================
-# TraversableDigraph
-# =====================================================
-
 class TraversableDigraph(SortableDigraph):
+    """
+    Adds DFS + BFS traversal methods.
+    """
 
     def dfs(self, start):
         """
-        Depth-first search – returns a list of visited nodes.
-        (Based on Listing 5-5 from Python Algorithms.)
+        Depth-first search, returning list of visited nodes
         """
         visited = set()
-        res = []
+        order = []
 
         def _visit(node):
             if node not in visited:
                 visited.add(node)
-                res.append(node)
+                order.append(node)
                 for nbr in self.edges.get(node, []):
                     _visit(nbr)
 
         _visit(start)
-        return res
+        return order
 
     def bfs(self, start):
         """
-        Breadth-first search – should YIELD visited nodes.
-        Uses deque per assignment.
+        Breadth-first search, yielding nodes as visited.
         """
-        visited = set()
-        queue = deque([start])
+        from collections import deque
 
-        visited.add(start)
+        visited = set([start])
+        queue = deque([start])
 
         while queue:
             node = queue.popleft()
-            yield node      # REQUIRED by assignment
-
+            yield node
             for nbr in self.edges.get(node, []):
                 if nbr not in visited:
                     visited.add(nbr)
                     queue.append(nbr)
 
 
-# =====================================================
-# DAG
-# =====================================================
-
 class DAG(TraversableDigraph):
     """
-    Directed acyclic graph.
-    Overrides add_edge so cycles are never introduced.
+    Directed acyclic graph — add_edge ensures no cycle.
     """
 
     def add_edge(self, u, v):
         """
-        Checks if adding u -> v creates a cycle.
-        If yes → raise Exception.
-        Else → perform the insertion.
+        Add edge u → v, but only if it does not create a cycle.
         """
         self.add_node(u)
         self.add_node(v)
 
-        # If v can reach u, then adding u->v forms a cycle.
+        # If v can reach u, then u->v creates a cycle
         if self._has_path(v, u):
-            raise Exception(f"Adding edge {u} -> {v} creates a cycle!")
+            raise ValueError(f"Adding edge {u} → {v} creates a cycle.")
 
-        # Safe to add
         self.edges[u].add(v)
 
     def _has_path(self, start, goal):
         """
-        Helper DFS test – is there a path start → … → goal?
+        Return True if a path exists start → ... → goal
         """
-        visited = set()
         stack = [start]
+        visited = set()
 
         while stack:
             node = stack.pop()
