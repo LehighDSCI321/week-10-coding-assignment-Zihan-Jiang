@@ -43,6 +43,15 @@ class SortableDigraph:
         """
         return list(self.nodes.keys())
 
+    def get_node_value(self, name):
+        """
+        Return the stored value of node `name`.
+        Raises KeyError if the node does not exist.
+        """
+        if name not in self.nodes:
+            raise KeyError(f"Node '{name}' does not exist.")
+        return self.nodes[name]
+
 
 class TraversableDigraph(SortableDigraph):
     """
