@@ -17,12 +17,12 @@ class SortableDigraph:
     def __init__(self):
         # nodes: dict of name → value
         self.nodes = {}
-        # edges: dict of name → dict of child → weight
+        # edges: dict of name → dict of (child → weight)
         self.edges = {}
 
     def add_node(self, name, value=None):
         """
-        Add a node with optional metadata value.
+        Add a node with optional value.
         """
         self.nodes[name] = value
         if name not in self.edges:
@@ -38,65 +38,84 @@ class SortableDigraph:
 
     def get_nodes(self):
         """
-        Return a list of node names.
+        Return list of node names.
         """
         return list(self.nodes.keys())
 
     def get_node_value(self, name):
         """
-        Return the stored value of node `name`.
-        Raises KeyError if the node does not exist.
+        Return node's stored value.
         """
         if name not in self.nodes:
             raise KeyError(f"Node '{name}' does not exist.")
         return self.nodes[name]
 
+    def get_edge_weight(self, u, v):
+        """
+        Return stored edge weight for u → v.
+        """
+        if u not in self.edges or v not in self.edges[u]:
+            raise KeyError(f"Edge '{u} → {v}' does not exist.")
+        return self.edges[u][v]
+
+    def successors(self, name):
+        """
+        Return sorted list of nodes reachable from `name` directly.
+        """
+        if name not in self.edges:
+            return []
+        return sorted(self.edges[name].keys())
+
+    def predecessors(self, name):
+        """
+        Return sorted list of nodes that point directly to `name`.
+        """
+        result = []
+        for parent, children in self.edges.items():
+            if name in children:
+                result.append(parent)
+        return sorted(result)
+
     def top_sort(self):
         """
-        Perform topological sort on the digraph.
-        Raises ValueError if a cycle is present.
+        Topological sort. Raises ValueError if cycle exists.
         """
-        indegree = {n: 0 for n in self.nodes}
-
-        # Count indegree
-        for parent in self.edges:
-            for child in self.edges[parent]:
+        indegree = {node: 0 for node in self.nodes}
+        for parent, children in self.edges.items():
+            for child in children:
                 indegree[child] += 1
 
-        # Start with zero-indegree nodes
-        queue = deque(sorted([n for n in indegree if indegree[n] == 0]))
-        result = []
+        queue = deque(sorted([n for n, d in indegree.items() if d == 0]))
+        order = []
 
         while queue:
             node = queue.popleft()
-            result.append(node)
+            order.append(node)
+            for child in sorted(self.edges.get(node, {}).keys()):
+                indegree[child] -= 1
+                if indegree[child] == 0:
+                    queue.append(child)
 
-            for nbr in self.edges.get(node, {}):
-                indegree[nbr] -= 1
-                if indegree[nbr] == 0:
-                    queue.append(nbr)
-
-        if len(result) != len(self.nodes):
+        if len(order) != len(self.nodes):
             raise ValueError("Graph has a cycle; cannot topologically sort.")
 
-        return result
+        return order
 
 
 class TraversableDigraph(SortableDigraph):
     """
-    Adds DFS and BFS traversal methods to SortableDigraph.
+    Adds DFS and BFS traversal methods.
     """
 
     def dfs(self, start):
         """
-        Depth-first search traversal from `start`.
-        Returns a list in DFS order, excluding start itself.
+        DFS traversal (excluding start from returned list).
         """
         visited = set()
         order = []
 
         def _visit(node):
-            for nbr in sorted(self.edges.get(node, {})):
+            for nbr in sorted(self.edges.get(node, {}).keys()):
                 if nbr not in visited:
                     visited.add(nbr)
                     order.append(nbr)
@@ -107,22 +126,19 @@ class TraversableDigraph(SortableDigraph):
 
     def bfs(self, start):
         """
-        Breadth-first search traversal from `start`.
-        Yields nodes as visited, excluding start itself.
+        BFS traversal (excluding start).
         """
-        visited = set()
+        visited = {start}
         queue = deque()
 
-        visited.add(start)
-
-        for nbr in sorted(self.edges.get(start, {})):
+        for nbr in sorted(self.edges.get(start, {}).keys()):
             queue.append(nbr)
             visited.add(nbr)
 
         while queue:
             node = queue.popleft()
             yield node
-            for nbr in sorted(self.edges.get(node, {})):
+            for nbr in sorted(self.edges.get(node, {}).keys()):
                 if nbr not in visited:
                     visited.add(nbr)
                     queue.append(nbr)
@@ -130,18 +146,17 @@ class TraversableDigraph(SortableDigraph):
 
 class DAG(TraversableDigraph):
     """
-    Directed acyclic graph — add_edge ensures no cycle.
+    DAG that prevents insertion of cycle–creating edges.
     """
 
     def add_edge(self, u, v, edge_weight=None):
         """
-        Add edge u → v only if it does not create a cycle.
-        Raises ValueError if inserting the edge introduces a cycle.
+        Add u → v only if it does not create a cycle.
+        Raises ValueError on cycle.
         """
         self.add_node(u)
         self.add_node(v)
 
-        # If v → ... → u already exists, adding u → v forms a cycle
         if self._has_path(v, u):
             raise ValueError(f"Adding edge {u} → {v} creates a cycle.")
 
@@ -149,8 +164,7 @@ class DAG(TraversableDigraph):
 
     def _has_path(self, start, goal):
         """
-        Return True if there is a path start → ... → goal.
-        DFS is used.
+        True if path start → ... → goal exists.
         """
         stack = [start]
         visited = set()
@@ -161,7 +175,6 @@ class DAG(TraversableDigraph):
                 return True
             if node not in visited:
                 visited.add(node)
-                for nbr in self.edges.get(node, {}):
+                for nbr in self.edges.get(node, {}).keys():
                     stack.append(nbr)
         return False
-
